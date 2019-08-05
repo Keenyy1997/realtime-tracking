@@ -1,0 +1,162 @@
+body {
+    background: #fff;
+    padding:0;
+    margin:0;
+    overflow-x:hidden;
+}
+/* BODY */
+
+
+#container-user {
+    position:fixed;
+    z-index:1000000;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:#fff;
+}
+
+#container-user .mainContainer {
+    width:60%;
+    margin:auto;
+    margin-top:10%;
+}
+
+#container-user .mainContainer h2 {
+    font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    font-size:2em;
+}
+
+#container-user .mainContainer form > input {
+    width:100%;
+    padding:1em;
+    box-sizing: border-box;
+    font-size:1.4em;
+    border:0;
+    outline: white;
+}
+
+#container-user .mainContainer form > button {
+    display:block;
+    margin-right:0;
+    margin-left:auto;
+    margin-top:2em;
+    /* POSICIONAMIENTO */
+
+    padding:1em 3em;
+    box-sizing: border-box;
+    font-size:1em;
+    border-radius: 2em;
+    border:0;
+    text-transform: uppercase;
+    background-color: rgb(240,240,240);
+    font-weight: 400;
+    transition: all 200ms;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    outline: none;
+}
+
+#container-user .mainContainer form > button:hover {
+    background-color: rgb(220,220,220);
+    transform: scale(1.05);
+    cursor: pointer;
+}
+
+#map {
+    height:100vh;
+}
+
+#container-mapa .mapa-header {
+    position:absolute;
+    left:0;
+    top:0;
+    width:100%;
+    text-align:right;
+    height:auto;
+    padding:1em;
+    box-sizing: border-box;
+    background-color: #fff;
+    z-index:1000;
+}
+
+#container-mapa .mapa-usuarios {
+    position:absolute;
+    right:0px;
+    top: 150px;
+    width:300px;
+    height:600px;
+    background-color:#fff;
+    padding:1em;
+    box-sizing: border-box;
+    z-index: 1000;
+    transition: all 400ms;
+}
+
+.active {
+    transform: translateX(300px);
+}
+
+.ocultar-btn {
+    position:fixed;
+    width:auto;
+    padding:.5em;
+    box-sizing: border-box;
+    border:0;
+    top:5em;
+    right:0;
+    z-index: 1000;
+}
+
+#container-mapa .mapa-usuarios > h2{
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-weight: 300;
+    text-align:center;
+}
+
+#container-mapa .mapa-usuarios li {
+    width:100%;
+    margin-top:10px;
+}
+
+#container-mapa .mapa-usuarios li button {
+    width:100%;
+    padding:.5em;
+    box-sizing: border-box;
+    font-size:1em;
+    border-radius: 0;
+    border:0;
+    text-transform: uppercase;
+    transition: all 500ms;
+    background: rgb(180,180,180);
+    animation: fadeIn 500ms ease-in-out;
+    cursor: pointer;
+    outline: none;
+}
+
+#container-mapa .mapa-usuarios li button:hover {
+    background: rgb(240,240,240);
+}
+
+#container-mapa .mapa-usuarios li button:active {
+    transform: scale(0.99);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity:0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+
+#container-mapa .mapa-usuarios ul {
+    max-height:400px;
+    margin:auto;
+    text-align:center;
+    overflow-y: auto;
+    list-style: none;
+}
+

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>OpenMaps with sockets</title>
+    <meta type="author" value="Kenny Vallejo"/>
+
+    <link href="./src/styles/index.css" rel="stylesheet"/>
+    <!-- ESTILOS PRINCIPALES -->
+
+    <script src="./src/js/leaflet.js"></script>
+    <link href="./src/styles/leaflet.css" rel="stylesheet"/>
+    <!-- LEAFLET -->
+</head>
+<body>
+    <div id="container-user">
+        <div class="mainContainer">
+            <h2>Escoge tu nombre de usuario:</h2>
+            <form onsubmit="asignarNombre(event)">
+                <input id="input-usuario" type='text' placeholder="Nombre de usuario" required/>
+                <button type='submit'>Asignar</button>
+            </form>
+        </div>
+        <!-- MAIN MODAL-->
+    </div>
+
+    <div id="container-mapa">
+        <div class="mapa-header">
+            <string>Usuario: <span id="usuario_title"></span></string>
+            <button onclick="cambiarUsuario()">Cambiar Usuario</button>
+        </div>
+
+        <button onclick="ocultarUsuarios()" class="ocultar-btn">Ocultar/Mostrar</button>
+        <div class="mapa-usuarios">
+            <h2>
+                Usuarios Conectados
+            </h2>
+            <ul id="usuarios_lista">
+            </ul>
+        </div>
+
+        <div id='map'></div>
+    </div>
+</body>
+</html>
+<script src="./src/js/socket.io.js"></script>
+<script>
+    var socket;
+    var map;
+    var currentUser;
+    var listaUsuarios = []
+
+    function init() {
+        var MiUsuario = localStorage.getItem('usuario');
+        document.getElementById('input-usuario').value = MiUsuario || "";
+        var PORT = 3000;
+
+        if (MiUsuario != null && MiUsuario != "") {
+            asignarUsuario(MiUsuario);
+            initMap();
+            initSocket();
+            MostrarPantalla(1);
+        } else {
+            MostrarPantalla(0);
+        }
+    }
+    // @Funcion init
+    // Esta funcion se encarga de ejecutar todo el codigo necesario al ya cargar la pagina.
+
+    function initMap() {
+
+        var lastCoords = localStorage.getItem('coords')
+        if (!lastCoords) 
+            lastCoords = {
+                lat:0,
+                lng:0
+            }
+        else
+            lastCoords = JSON.parse(lastCoords)
+
+        if (map != null)
+            return;
+
+        map = L.map('map', {
+            center: [lastCoords.lat, lastCoords.lng],
+            zoom:15
+        })
+
+        var accessToken = 'pk.eyJ1Ijoia2Vlbnl5MTk5NyIsImEiOiJjanRjMTEzZGIwcnB6NDlwNGk4cjNmd2FpIn0.RqO1x67kmupEDbltZcqPJw';
+
+        L.tileLayer(`https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=${accessToken}`, {
+            attribution: '',
+            maxZoom: 20,
+            minZoom:15,
+            id: 'mapbox.streets',
+            accessToken: accessToken
+        }).addTo(map);
+
+        map.on('click', (location) => {
+            console.log("Click en el mapa!")
+            console.log(location);
+            enviarLocation(location);
+        })
+
+        requestGPS();
+        // PREGUNTAMOS PARA VER SI EL DISPOSITIVO TIENE GPS PARA ASI
+        // INCORPORARLO EN EL MAPA
+    }
+    // @Funcion initMap
+    // Con esta funcion iniciamos el mapa
+    // y todo lo que conlleva
+
+    function initSocket() {
+
+        const PORT = 8080;
+
+        if (socket != null) {
+            socket.connect();
+            return;
+        }
+
+        var coords = localStorage.getItem('coords')
+
+        if (coords) {
+            coords = JSON.parse(coords)
+        } else {
+            coords = {
+                lat: 0,
+                lng: 0
+            }
+        }
+
+        socket = io(window.location.hostname + `:${PORT}`, {
+            query: {
+                user: localStorage.getItem('usuario'),
+                lat: coords.lat,
+                lng: coords.lng
+            }
+        })
+
+        socket.on('connect', () => {
+            console.log("Conectado!");
+            var usuario = localStorage.getItem('usuario')
+            var marker = L.marker([coords.lat, coords.lng]).addTo(map)
+            marker.bindPopup(`<b>${usuario}</b>`)
+
+            listaUsuarios.push({
+                user: localStorage.getItem('usuario'),
+                lat: coords.lat,
+                lng: coords.lng,
+                marker: marker
+            })
+        })
+
+        socket.on('new_connection', (data) => {
+            console.log(`Nuevo usuario:`, data)
+            listaUsuarios.push(data);
+            generarUsuario(data)
+            actualizarUbicacion(data.user, data.lat, data.lng)
+        })
+
+        socket.on('new_disconnect', (data) => {
+            desconectarUsuario(data.user)
+        })
+
+        socket.on('new_location', (data) => {
+            actualizarUbicacion(data.user, data.lat, data.lng)
+        })
+
+        socket.on('old_connections', (data) => {
+            var Users = data;
+            console.log(`Recibiendo usuarios:`, data);
+
+            Users.forEach(item => {
+                generarUsuario(item);
+                listaUsuarios.push(item)
+            });
+        })
+
+    }
+    // @Funcion initSocket
+    // CON ESTA FUNCION DECLARAMOS TODO LO NECESARIO AL COMENZAR EL SOCKET
+
+    // ~~~~~~~~~~~~~~~~ FUNCIONES INIT
+
+    function disconnectSocket() {
+        if (socket) {
+            socket.disconnect();
+        }
+    }
+    // @Funcion disconnectSocket
+    // CON ESTA FUNCION PODEMOS DESCONECTAR EL SOCKET
+
+    function enviarLocation(location) {
+        if (socket) {
+
+            socket.emit('new_location', {
+                user: localStorage.getItem('usuario'),
+                lat: location.latlng.lat,
+                lng: location.latlng.lng
+            })
+
+            localStorage.setItem('coords', JSON.stringify({
+                lat: location.latlng.lat,
+                lng: location.latlng.lng
+            }))
+            actualizarUbicacion(localStorage.getItem('usuario'), location.latlng.lat, location.latlng.lng);
+        }
+    }
+    // @Funcion enviarLocation
+    // ESTA ES LA FUNCION QUE SE ENCARGA EN ENVIAR AL SOCKET EL CAMBIO DE POSICION
+
+    // ~~~~~~~~~~~~~~~~~ FUNCIONES DEL SOCKET
+
+    function cambiarUsuario() {
+        asignarUsuario("");
+        localStorage.setItem('usuario', '');
+        MostrarPantalla(0);
+        listaUsuarios.forEach(item => {
+            map.removeLayer(item.marker)
+        })
+        listaUsuarios = [];
+        disconnectSocket();
+    }
+    // @Funcion cambiarUsuario
+    // Esta funcion me permite cambiar de usuario, es decir borrar el usuario actual y devolverme
+    // A la pantalla de escoger un usuario
+
+    function asignarUsuario(usuario) {
+        document.getElementById('usuario_title').innerHTML = usuario;
+        currentUser = usuario;
+    }
+    // @Funcion asignarUsuario
+    // CON ESTA FUNCION CAMBIO EL NOMRE DE USUARIO LABEL QUE ESTA EN EL CONTENEDOR DEL MAPA
+
+    function ocultarUsuarios() {
+
+        var container = document.getElementsByClassName("mapa-usuarios")[0];
+
+        container.classList.toggle('active');
+    }
+    // @Funcion ocultarUsuarios
+    // Esta funcion se encarga deo cultar la barra lateral que muestar los usuarios conectados
+
+    function asignarNombre(e) {
+        e.preventDefault();
+        console.log(e);
+
+        var UsuarioEl = document.getElementById('input-usuario')
+        var UsuarioName = UsuarioEl.value;
+
+        // alert(`Usuario: ${UsuarioName}`);
+        localStorage.setItem('usuario', UsuarioName);
+        asignarUsuario(UsuarioName);
+        MostrarPantalla(1);
+        initMap();
+        initSocket();
+    }
+    // @Funcion asignarNombre
+    // con eSta funcion obtengo el nombre de usuario del formulario y puedo ir 
+    // a la pantalla del mapa.
+
+    function desconectarUsuario(usuario) {
+        console.log(`Se ha desconectado le usuario: ${usuario}`)
+        var Lista = document.getElementById('usuarios_lista')
+
+        for(let i = 0;i < Lista.children.length;i++) {
+            if (Lista.children[i].getAttribute('user-id') == usuario) {
+                Lista.children[i].remove();
+                console.log("removiendo usuario!");
+            }
+        }
+
+        for(let i =0;i < listaUsuarios.length;i++) {
+            if (listaUsuarios[i]["user"] == usuario) {
+                
+                if (listaUsuarios[i]["marker"] != null)
+                    map.removeLayer(listaUsuarios[i]["marker"])
+                
+                listaUsuarios.splice(i, 1);
+                break;
+            }
+        }
+    }
+    // @Funcion descontarUsuario
+    // Esta funcion se encarga de eliminar el usuario de la barra lateral e internamente
+
+    function generarUsuario(usuario) {
+
+        var Lista = document.getElementById('usuarios_lista')
+        var LiEl = document.createElement('li')
+        var ButtonEl = document.createElement('button')
+
+        ButtonEl.setAttribute('onclick', `setLocation('${usuario.user}')`);
+        ButtonEl.innerHTML = usuario.user;
+
+        LiEl.setAttribute('user-id', usuario.user);
+        LiEl.appendChild(ButtonEl)
+
+        var exists = false;
+        for(let i = 0;i < Lista.children.length;i++) {
+            if (Lista.children[i].getAttribute('user-id') == usuario.user) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists) {
+            Lista.appendChild(LiEl);
+        }
+    }
+    // @Funcion generarUsuario
+    // Esta funcion genera los usarios dentro de la lista lateral
+
+    function MostrarPantalla(pantalla) {
+
+        var Pantallas = ["#container-user", "#container-mapa"]
+
+        Pantallas.map((item, index) => {
+                    if (index == pantalla) {
+                        document.querySelector(item).style.display = 'block'
+                    } else {
+                        document.querySelector(item).style.display = 'none'
+                    }
+                })
+
+    }
+    // @Funcion MostrarPantalla
+    // CON ESTA FUNCION PUEDO CAMBIAR ENTRE LA PANTALLA DE INICIO Y LA PANTALLA DEL MAPA
+
+    // ~~~~~~~~~~~~~~~~~ FUNCIONES DE LOS USUARIOS
+
+
+    function setLocation(usuario) {
+        // alert(`Usuario: ${usuario}`);
+
+        var item = null;
+        for(let i = 0;i < listaUsuarios.length;i++) {
+            if (listaUsuarios[i]["user"] == usuario) {
+                item = listaUsuarios[i];
+                currentUser = usuario;
+                break;
+            }
+        }
+        if (item) {
+            // alert(`Lat: ${item.lat}\n Long: ${item.lng}`);
+            if (item.lat != 0 && item.lng != 0)
+                centerMap(item.lat, item.lng);
+        }
+    }
+    // @Funcion setLocation
+    // esta funcion se encarga de que al hacer click en un usuario, se ponga en todo el centro de la pantalla
+
+    function myLocation(location) {
+        console.log(`My Location:`, location);
+        var { latitude, longitude } = location.coords;
+
+        localStorage.setItem('coords', JSON.stringify({
+            lat:latitude,
+            lng: longitude
+        }))
+        map.flyTo([latitude, longitude])
+
+        actualizarUbicacion(localStorage.getItem('usuario'), latitude, longitude)
+
+        console.log(`Lat: ${latitude} - Long: ${longitude}`)
+    }
+    // @Funcion myLocation
+    // TOMA MIS PARAMETROS AL MOMENTO DE HACER LA CONEXION AL GPS
+    // Y AGREGA MI MARCADOR AL MAPA Y LO POSICIONA
+
+    function actualizarUbicacion(usuario, lat, lng) {
+        console.log("Actualizando ubicacion!");
+
+        for(let i = 0;i < listaUsuarios.length;i++) {
+            if (listaUsuarios[i]["user"] == usuario) {
+                listaUsuarios[i]["lat"] = lat;
+                listaUsuarios[i]["lng"] = lng;
+                if (listaUsuarios[i]["marker"] == null) {
+                    var marker = L.marker([lat, lng]).addTo(map);
+                    marker.bindPopup(`<b>${usuario}</b>`)
+                    listaUsuarios[i]["marker"] = marker;
+                }
+                else {
+                    listaUsuarios[i]["marker"].setLatLng([lat, lng])
+                }
+                console.log("Usuario actualizado!");
+                break;
+            }
+        }
+    }
+    // @Funcion actualizarUbicacion
+    // Esta funcion me permite actualizar la ubicacion de los markers
+
+    function centerMap(lat, lng) {
+        map.flyTo([lat, lng]);
+    }
+    // @Funcion centerMap
+    // Me permite centrar en una lat y long el mapa
+
+    function requestGPS(){
+
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(myLocation)
+        } else {
+            alert('Geolocation is not supported in this device.');
+        }
+    }
+    // @Funcion requestGPS
+    // funcion encargada de pedir el gps al cliente
+
+    // ~~~~~~~~~~~~~~~~~ FUNCIONES DEL MAPA
+    
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    //                                              COMIENZO DE LA APP 
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    init();
+    // COMENZAMOS LA APP 
+
+</script>
